@@ -1,110 +1,92 @@
 const bcrypt = require('bcryptjs');
 const { validationResult } = require('express-validator');
 const { generateToken, verifyToken } = require('../utils/auth');
-const User = require('../models/User');
+const Student = require('../models/Student');
 
+// ---------- Student Login ----------
 exports.login = async (req, res, next) => {
-    let success = false;
-    try {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            return res.status(400).json({success, errors: errors.array() });
-        }
-        
-        const { email, password } = req.body;
-
-        try {
-            let user = await User.findOne({ email });
-            if (!user) {
-                return res.status(400).json({success, errors: [{ msg: 'Invalid credentials' }] });
-            }
-
-            const isMatch = await bcrypt.compare(password, user.password);
-
-            if (!isMatch) {
-                return res.status(400).json({success, errors: [{ msg: 'Invalid credentials' }] });
-            }
-            const token = generateToken(user.id, user.isAdmin);
-            res.status(200).json({
-                success: true,
-                data: {
-                    token,
-                    user: {
-                        id: user.id,
-                        email: user.email,
-                        isAdmin: user.isAdmin,
-                    },
-                },
-            });
-
-        }
-        catch (err) {
-            console.error(err.message);
-            res.status(500).send('Server error');
-        }
-    } catch (error) {
-        next(error);
-    }
-};
-
-exports.changePassword = async (req, res, next) => {
-    let success = false;
-    try {
-        const errors = validationResult(req);
-
-        if (!errors.isEmpty()) {
-            return res.status(400).json({success, errors: errors.array() });
-        }
-
-        const { email, password, newPassword } = req.body;
-
-        try {
-            let user = await User.findOne({ email });
-            if (!user) {
-                return res.status(400).json({success, errors: [{ msg: 'Invalid credentials' }] });
-            }
-
-            const oldPassword = await bcrypt.compare(password, user.password);
-
-            if (!oldPassword) {
-                return res.status(400).json({success, errors: [{ msg: 'Invalid credentials' }] });
-            }
-
-            const salt = await bcrypt.genSalt(10);
-            const newp = await bcrypt.hash(newPassword, salt);
-
-            user.password = newp;
-            await user.save();
-
-            success = true;
-            res.status(200).json({ success, msg: 'Password changed successfully' });
-
-        }
-        catch (err) {
-            console.error(err.message);
-            res.status(500).send('Server error');
-        }
-    } catch (error) {
-        next(error);
-    }
-}
-
-exports.verifySession = async (req, res, next) => {
-    let success = false;
+  let success = false;
+  try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({errors: errors.array(), success});
+      return res.status(400).json({ success, errors: errors.array() });
     }
-    try {
-        const { token } = req.body;
-        const decoded = verifyToken(token);
-        if (decoded) {
-            success = true;
-            return res.status(200).json({success, data: decoded});
-        }
-        return res.status(400).json({success, "message": "Invalid token"});
-    } catch (err) {
-        console.error(err.message);
-        return res.status(500).json({success, "message": "Server Error"});
+
+    const { email, password } = req.body;
+
+    const student = await Student.findOne({ email });
+    if (!student) {
+      return res
+        .status(400)
+        .json({ success, errors: [{ msg: 'Invalid email or password' }] });
     }
-}
+
+    const isMatch = await bcrypt.compare(password, student.password);
+    if (!isMatch) {
+      return res
+        .status(400)
+        .json({ success, errors: [{ msg: 'Invalid email or password' }] });
+    }
+
+    const token = generateToken(student.id, false);
+    success = true;
+    res.status(200).json({
+      success,
+      data: {
+        token,
+        student: {
+          id: student.id,
+          email: student.email,
+          name: student.name,
+        },
+      },
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+};
+
+// ---------- Student Change Password ----------
+exports.changePassword = async (req, res, next) => {
+  let success = false;
+  try {
+    const { email, oldPassword, newPassword } = req.body;
+    const student = await Student.findOne({ email });
+    if (!student) {
+      return res.status(400).json({ success, msg: 'Invalid credentials' });
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, student.password);
+    if (!isMatch) {
+      return res.status(400).json({ success, msg: 'Invalid credentials' });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    student.password = hashed;
+    await student.save();
+
+    success = true;
+    res.status(200).json({ success, msg: 'Password changed successfully' });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+};
+
+// ---------- Verify Token ----------
+exports.verifySession = async (req, res, next) => {
+  let success = false;
+  try {
+    const { token } = req.body;
+    const decoded = verifyToken(token);
+    if (decoded) {
+      success = true;
+      return res.status(200).json({ success, data: decoded });
+    }
+    res.status(400).json({ success, msg: 'Invalid token' });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ success, msg: 'Server error' });
+  }
+};

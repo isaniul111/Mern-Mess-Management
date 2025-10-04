@@ -24,7 +24,7 @@ export default function AuthPage() {
               />
             </svg>
             &nbsp;
-            Hostel Management System
+            Mess Management System
           </a>
           <Outlet />
         </div>
